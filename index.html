@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>DomainGuessr</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <div id="mainMenu">
+      <img src="https://i.imgur.com/QnBLIYi.png" alt="Logo" id="logo">
+      <div class="button-group">
+        <button onclick="game.startSingleplayer()">Singleplayer</button><br>
+        <button class="sub-button" onclick="game.startEndlessMode()">Endlos</button>
+      </div>
+      <div class="button-group">
+        <button onclick="game.showPartyMenu()">Multiplayer</button><br>
+        <button class="sub-button" onclick="game.showPartyMenu()">Party</button>
+      </div>
+      <div class="button-group">
+        <button onclick="game.showLeaderboard()">Leaderboard</button>
+      </div>
+    </div>
+
+    <!-- Party -->
+    <div id="partyLobby" class="hidden">
+      <button class="home-button" onclick="game.backToMenu(true)">&#x1F3E0;</button>
+      <h2>Party-Modus</h2>
+      <button onclick="game.createPartyLobby()">Lobby erstellen</button>
+      <div id="createLobbySection" class="hidden">
+        <p>Dein Lobby-Code (klicken zum Kopieren):</p>
+        <div id="lobby-code-display" onclick="game.copyLobbyCode()">Code...</div>
+        <p class="status-text" id="host-status">Warte auf Mitspieler...</p>
+        <div id="host-settings">
+          <label for="round-select">Runden:</label>
+          <select id="round-select">
+            <option value="5">5 Runden</option>
+            <option value="10" selected>10 Runden</option>
+            <option value="20">20 Runden</option>
+            <option value="30">30 Runden</option>
+          </select>
+        </div>
+        <button id="kick-player-btn" class="small-button hidden" onclick="game.kickPlayer()">Gegner kicken</button>
+        <button id="start-game-btn" onclick="game.startPartyGame()" disabled>Spiel starten</button>
+      </div>
+      <hr style="margin: 20px 0;">
+      <div id="joinLobbySection">
+        <p>Lobby beitreten:</p>
+        <input id="join-code-input" type="text" placeholder="Code eingeben..." maxlength="4">
+        <button onclick="game.joinPartyLobby()">Beitreten</button>
+        <p class="status-text" id="client-status"></p>
+        <button id="leave-lobby-btn" class="small-button hidden" onclick="game.leaveLobby()">Lobby verlassen</button>
+      </div>
+    </div>
+
+    <!-- Game -->
+    <div id="game" class="hidden">
+      <button class="home-button" onclick="game.backToMenu()">&#x1F3E0;</button>
+      <div id="player-stats">
+        <div id="level-text">Level 1</div>
+        <div id="xp-bar-container"><div id="xp-bar"></div></div>
+        <div id="xp-text">0 / 100 XP</div>
+      </div>
+      <div id="game-header">
+        <div id="party-score-display"></div>
+        <div id="round-info"></div>
+      </div>
+      <div id="domain"></div>
+      <div id="points-flash-container"></div>
+      <input id="guess" type="text" placeholder="Antwort eingeben...">
+      <div>
+        <button id="hint-btn" onclick="game.getHint()">Tipp</button>
+        <button onclick="game.skipDomain()">Skip</button>
+      </div>
+    </div>
+
+    <!-- Endless -->
+    <div id="endlessGame" class="hidden">
+      <button class="home-button" onclick="game.backToMenu()">&#x1F3E0;</button>
+      <h2>Endlos-Modus</h2>
+      <div id="endlessDomain"></div>
+      <input id="endlessGuess" type="text" placeholder="Antwort eingeben...">
+      <div id="endlessAnswerFlash"></div>
+      <div id="endlessScore"></div>
+      <button id="endlessSkipBtn">Skip</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="gameOver" class="hidden">
+      <h2 id="gameOverTitle">Runde beendet!</h2>
+      <p id="finalScore"></p>
+      <p id="xpGained"></p>
+      <div id="leaderboard-submission">
+        <input id="username" placeholder="Dein Name für das Leaderboard">
+        <button id="submitScoreBtn" onclick="game.submitScore()">Score hochladen</button>
+      </div>
+      <button onclick="game.backToMenu()">Zurück zum Menü</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="hidden">
+      <button class="home-button" onclick="game.backToMenu()">&#x1F3E0;</button>
+      <h2>Leaderboard</h2>
+      <ul id="leaderboardList"></ul>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

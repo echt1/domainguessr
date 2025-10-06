@@ -1,0 +1,101 @@
+:root { --accent-color: #FFD700; --bg-color: #02133E; --button-color: #0A2A6A; --button-hover: #1A4A9A; --sub-button: #072051; }
+
+body {
+  background-color: var(--bg-color);
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  text-align: center;
+  padding: 20px;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.container { width: 100%; max-width: 500px; position: relative; }
+.hidden { display: none; }
+
+#logo { max-width: 280px; margin-bottom: 20px; }
+.button-group { margin-bottom: 10px; }
+
+button {
+  padding: 12px 25px;
+  width: 220px;
+  margin: 5px;
+  background-color: var(--button-color);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-family: 'Poppins', sans-serif;
+  transition: background-color 0.2s;
+}
+button:hover { background-color: var(--button-hover); }
+button:disabled { background-color: #555; cursor: not-allowed; }
+
+.sub-button { width: 180px; font-size: 0.9rem; padding: 8px 20px; background-color: var(--sub-button); }
+.small-button { padding: 5px 10px; width: auto; font-size: 0.8rem; }
+
+#domain, #endlessDomain {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin: 15px 0;
+  color: var(--accent-color);
+  min-height: 48px;
+}
+
+input, select {
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: none;
+  text-align: center;
+  width: 280px;
+  font-family: 'Poppins', sans-serif;
+  margin-top: 10px;
+  background-color: #FFF;
+  color: #000;
+}
+
+select { text-align-last: center; }
+
+.home-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#lobby-code-display {
+  font-size: 2.5rem;
+  letter-spacing: 4px;
+  font-weight: 600;
+  color: var(--accent-color);
+  background-color: var(--sub-button);
+  padding: 10px;
+  border-radius: 8px;
+  margin: 15px auto;
+  max-width: 200px;
+  cursor: pointer;
+  user-select: text;
+}
+
+.status-text { min-height: 24px; margin-top: 10px; color: #CCC; }
+
+#game-header { display: flex; justify-content: space-between; align-items: center; max-width: 400px; margin: 0 auto 15px auto; }
+#party-score-display { text-align: left; font-size: 1.1rem; font-weight: 600; flex: 1; }
+#round-info { text-align: right; font-size: 1.1rem; flex: 1; }
+
+#points-flash-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+#points-flash { position: absolute; top: 50%; left: 50%; font-size: 3rem; color: var(--accent-color); text-shadow: 2px 2px 4px #000; animation: flash-fade 1.5s forwards; }
+
+@keyframes flash-fade {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(1.2); }
+}
