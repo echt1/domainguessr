@@ -56,5 +56,9 @@ submitBtn.addEventListener("click", () => {
 
 nextBtn.addEventListener("click", showNewDomain);
 window.onload = showNewDomain;
-window.game = game;
-
+window.game = {
+  startSingleplayer,
+  startEndlessMode,
+  showPartyMenu,
+  showLeaderboard
+};
