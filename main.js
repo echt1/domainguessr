@@ -31,17 +31,9 @@ function backToMenu(isParty = false) {
     showScreen("mainMenu");
 }
 
-// ====== Party-Modus Logik ======
-function showPartyMenu() { showScreen("partyLobby"); }
-
-function generateShortCode() {
-    return Math.random().toString(36).substring(2, 6).toUpperCase();
-}
-
-async function createPartyLobby() {
-    // ... (Diese Funktion und die folgenden sind Platzhalter und werden in Phase 2 gefüllt)
-    // Die Logik hier wird bewusst einfach gehalten, bis die Singleplayer-Basis steht.
-}
+// ====== Party-Modus Platzhalter (für Phase 2) ======
+function showPartyMenu() { alert("Party-Modus kommt in Phase 2!"); }
+function createPartyLobby() {}
 async function joinPartyLobby() {}
 function setupConnection(conn) {}
 function startPartyGame() {}
@@ -54,7 +46,6 @@ function leaveLobby() {}
 // ====== Spielablauf & Runden-Logik (Fokus auf Singleplayer für Phase 1) ======
 function startSingleplayer() {
     loadPlayerState();
-    // Wir nehmen 10 zufällige Domains aus dem Pool für die Runde
     gameState = {
         round: 0,
         score: 0,
@@ -65,8 +56,7 @@ function startSingleplayer() {
     
     document.getElementById('player-stats').style.display = 'block';
     document.getElementById('party-score-display').style.display = 'none';
-    // Tipps im Singleplayer ausblenden, wie gewünscht
-    document.getElementById('hint-btn').style.display = 'none';
+    document.getElementById('hint-btn').style.display = 'none'; // Tipps im SP aus
     showScreen("game");
     nextDomain();
 }
@@ -85,7 +75,7 @@ function getDomainPool(count) {
 }
 
 function nextDomain() {
-    // BUGFIX: Prüfe gegen die Länge der Runden-Liste, nicht hartcodiert auf 10
+    // BUGFIX: Prüft jetzt korrekt gegen die Länge der Runden-Liste
     if (gameState.round >= gameState.domains.length) {
         endGame(false); // isParty = false
         return;
@@ -99,21 +89,7 @@ function nextDomain() {
     gameState.round++;
 }
 
-// Event Listener für die Eingabe. Nur einmal am Anfang definieren.
-document.getElementById("guess").addEventListener("input", () => {
-    // Party-Modus-Logik ist hier noch nicht drin, kommt in Phase 2
-    if (connection) return;
-
-    // Singleplayer-Logik
-    const guess = document.getElementById("guess").value.trim().toLowerCase();
-    if (!gameState.current || !gameState.current.answers) return;
-    if (gameState.current.answers.some(a => guess.includes(a))) {
-        onCorrectGuess(false); // isParty = false
-    }
-});
-
 function onCorrectGuess(isParty) {
-    // Diese Funktion wird später für beide Modi genutzt
     if (isParty) {
         // Logik für Party-Modus kommt in Phase 2
     } else { // Singleplayer
@@ -129,7 +105,6 @@ function onCorrectGuess(isParty) {
 
 function flashPoints(text) {
     const container = document.getElementById('points-flash-container');
-    // Entferne alten Flash, falls vorhanden
     const oldFlash = document.getElementById('points-flash');
     if(oldFlash) oldFlash.remove();
 
@@ -140,21 +115,12 @@ function flashPoints(text) {
     setTimeout(() => flash.remove(), 1500);
 }
 
-
 function skipDomain() {
-    // Party-Modus-Logik kommt in Phase 2
-    if (connection) return;
-
-    // Singleplayer
-    nextDomain();
+    if (connection) return; // Party-Modus kommt später
+    nextDomain(); // Funktioniert jetzt für Singleplayer
 }
 
-function getHint() {
-    // Party-Modus-Logik kommt in Phase 2
-    if (connection) return;
-    
-    // Im Singleplayer passiert nichts, da der Button versteckt ist
-}
+function getHint() { /* Macht nichts im Singleplayer */ }
 
 function endGame(isParty) {
     showScreen("gameOver");
@@ -176,20 +142,17 @@ function startEndlessMode() {
     gameState = { score: 0, correctCount: 0, recent: [], current: {} };
     showScreen("endlessGame");
     document.getElementById("endlessScore").textContent = "Score: 0";
-    document.getElementById("endlessAnswerFlash").style.minHeight = '20px'; // Stellt sicher, dass das Layout nicht springt
+    document.getElementById("endlessAnswerFlash").style.minHeight = '20px';
     document.getElementById("endlessAnswerFlash").textContent = '';
-
     nextEndlessDomain();
 }
+
 function nextEndlessDomain() {
     document.getElementById("endlessGuess").value = "";
     document.getElementById("endlessAnswerFlash").textContent = '';
     
     let pool = domains.filter(d => !gameState.recent.includes(d.tld));
-    if (pool.length === 0) { // Wenn alle Domains durch sind, fange von vorne an
-        gameState.recent = [];
-        pool = domains;
-    }
+    if (pool.length === 0) { gameState.recent = []; pool = domains; }
 
     const candidate = pool[Math.floor(Math.random() * pool.length)];
     gameState.current = candidate;
@@ -198,22 +161,6 @@ function nextEndlessDomain() {
     document.getElementById("endlessDomain").textContent = gameState.current.tld;
 }
 
-document.getElementById("endlessGuess").addEventListener("input", () => {
-    const guess = document.getElementById("endlessGuess").value.trim().toLowerCase();
-    if (gameState.current.answers.some(a => guess.includes(a))) {
-        gameState.correctCount++;
-        const streakBonus = Math.floor(gameState.correctCount / 10);
-        gameState.score += 10 + streakBonus;
-        document.getElementById("endlessScore").textContent = "Score: " + gameState.score;
-        nextEndlessDomain();
-    }
-});
-document.getElementById("endlessSkipBtn").addEventListener("click", () => {
-    const flash = document.getElementById("endlessAnswerFlash");
-    flash.textContent = "Antwort: " + gameState.current.answers[0];
-    setTimeout(() => nextEndlessDomain(), 1200);
-});
-
 // ====== XP & Level System ======
 function getXpForNextLevel(level) { return Math.floor(100 * Math.pow(1.15, level - 1)); }
 function loadPlayerState() { const savedState = localStorage.getItem('domainGuessrPlayerState'); if (savedState) playerState = JSON.parse(savedState); updatePlayerUI(); }
@@ -221,31 +168,59 @@ function savePlayerState() { localStorage.setItem('domainGuessrPlayerState', JSO
 function addXp(amount) { playerState.xp += amount; const neededXp = getXpForNextLevel(playerState.level); if (playerState.xp >= neededXp) { playerState.level++; playerState.xp -= neededXp; } savePlayerState(); updatePlayerUI(); }
 function updatePlayerUI() { const neededXp = getXpForNextLevel(playerState.level); const xpPercentage = Math.min((playerState.xp / neededXp) * 100, 100); document.getElementById('level-text').textContent = `Level ${playerState.level}`; document.getElementById('xp-text').textContent = `${playerState.xp} / ${neededXp} XP`; document.getElementById('xp-bar').style.width = `${xpPercentage}%`; }
 
-// ====== Leaderboard ======
-async function submitScore() { /* ... Dein Leaderboard-Code ... */ }
-async function showLeaderboard() { /* ... Dein Leaderboard-Code ... */ }
+// ====== Leaderboard (Platzhalter für Phase 3) ======
+async function submitScore() { alert("Leaderboard-Funktion wird in Phase 3 repariert!"); }
+async function showLeaderboard() { alert("Leaderboard-Funktion wird in Phase 3 repariert!"); }
 
-// ====== Initialisierung & Zuweisung an das window-Objekt ======
-// Macht die Funktionen für die HTML onclick="" Attribute verfügbar
-window.game = {
-    startSingleplayer,
-    startEndlessMode,
-    showPartyMenu,
-    showLeaderboard,
-    backToMenu,
-    createPartyLobby,
-    joinPartyLobby,
-    copyLobbyCode,
-    kickPlayer,
-    leaveLobby,
-    startPartyGame,
-    getHint,
-    skipDomain,
-    submitScore
-};
-
-// Startet das Spiel, wenn die Seite geladen ist
+// ====== Initialisierung & Event Listener ======
+// Dieser Block wird ausgeführt, NACHDEM die komplette HTML-Seite geladen ist.
 window.onload = () => {
+    // Event Listener für die Eingabefelder hier definieren, um den Fehler zu vermeiden
+    document.getElementById("guess").addEventListener("input", () => {
+        if (connection) return; // Party-Modus Logik kommt später
+        const guess = document.getElementById("guess").value.trim().toLowerCase();
+        if (!gameState.current || !gameState.current.answers) return;
+        if (gameState.current.answers.some(a => guess.includes(a))) {
+            onCorrectGuess(false); // isParty = false
+        }
+    });
+
+    document.getElementById("endlessGuess").addEventListener("input", () => {
+        const guess = document.getElementById("endlessGuess").value.trim().toLowerCase();
+        if (gameState.current.answers.some(a => guess.includes(a))) {
+            gameState.correctCount++;
+            const streakBonus = Math.floor(gameState.correctCount / 10);
+            gameState.score += 10 + streakBonus;
+            document.getElementById("endlessScore").textContent = "Score: " + gameState.score;
+            nextEndlessDomain();
+        }
+    });
+    
+    document.getElementById("endlessSkipBtn").addEventListener("click", () => {
+        const flash = document.getElementById("endlessAnswerFlash");
+        flash.textContent = "Antwort: " + gameState.current.answers[0];
+        setTimeout(() => nextEndlessDomain(), 1200);
+    });
+
+    // Macht die Funktionen für die HTML onclick="" Attribute verfügbar
+    window.game = {
+        startSingleplayer,
+        startEndlessMode,
+        showPartyMenu,
+        showLeaderboard,
+        backToMenu,
+        createPartyLobby,
+        joinPartyLobby,
+        copyLobbyCode,
+        kickPlayer,
+        leaveLobby,
+        startPartyGame,
+        getHint,
+        skipDomain,
+        submitScore
+    };
+
+    // Spiel starten
     loadPlayerState();
     showScreen('mainMenu');
 };
