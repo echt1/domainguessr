@@ -21,7 +21,6 @@ function backToMenu(isParty = false) {
         peer = null; connection = null; isHost = false;
         clearTimeout(opponentFinishedTimer);
     }
-    // Kompletter UI-Reset für die Party-Lobby
     document.getElementById('createLobbySection').classList.add('hidden');
     document.getElementById('join-code-input').value = '';
     document.getElementById('host-status').textContent = 'Warte auf Mitspieler...';
@@ -29,7 +28,7 @@ function backToMenu(isParty = false) {
     document.getElementById('start-game-btn').disabled = true;
     document.getElementById('kick-player-btn').classList.add('hidden');
     document.getElementById('leave-lobby-btn').classList.add('hidden');
-    document.getElementById('leave-lobby-btn').disabled = true; // Cooldown Reset
+    document.getElementById('leave-lobby-btn').disabled = true;
     showScreen("mainMenu");
 }
 
@@ -107,7 +106,7 @@ function setupConnection(conn) {
 
     connection.on('data', handlePeerData);
     connection.on('close', () => {
-        if (!partyState || partyState.round < partyState.settings.rounds) {
+        if (!partyState || !partyState.settings || partyState.round < partyState.settings.rounds) {
             alert("Verbindung zum Mitspieler verloren.");
             backToMenu(true);
         }
@@ -127,6 +126,7 @@ function handlePeerData(data) {
         case 'start': initializePartyGame(data); break;
         case 'round_finished':
             partyState.opponentState = data.state;
+            updatePartyScoreDisplay(true); // Zwischenstand aktualisieren
             if (partyState.myState.finished) {
                 clearTimeout(opponentFinishedTimer);
                 showRoundSummary();
@@ -145,17 +145,15 @@ function handlePeerData(data) {
 
 function copyLobbyCode() {
     const code = document.getElementById('lobby-code-display').textContent;
-    if (code && code !== 'Verbinde...') {
-        navigator.clipboard.writeText(code).then(() => {
-            document.getElementById('host-status').textContent = `Code "${code}" kopiert!`;
-        });
-    }
+    if (code && code.includes('...')) return;
+    navigator.clipboard.writeText(code).then(() => {
+        document.getElementById('host-status').textContent = `Code "${code}" kopiert!`;
+    });
 }
 
 function kickPlayer() { if(connection) { connection.send({ type: 'kicked' }); setTimeout(() => connection.close(), 500); } }
 function leaveLobby() { if(connection) { connection.send({ type: 'left' }); setTimeout(() => backToMenu(true), 500); } }
 
-// ====== Spielablauf & Runden-Logik (PARTY MODUS) ======
 function initializePartyGame(initialState) {
     partyState = { myScore: 0, opponentScore: 0, round: 0, domains: initialState.domains, settings: initialState.settings };
     document.getElementById('player-stats').style.display = 'none';
@@ -191,7 +189,7 @@ function onGuessOrSkip(isSkip = false) {
     const timeTaken = (Date.now() - roundTimer) / 1000;
     partyState.myState = { ...partyState.myState, time: timeTaken, finished: true, skipped: isSkip };
 
-    let pointsObject = { base: 0, timeBonus: 0, firstBonus: 0, total: 0 };
+    let pointsObject = { base: 0, timeBonus: 0, total: 0 };
     const domainData = partyState.domains[partyState.round];
     const guess = document.getElementById("guess").value.trim().toLowerCase();
 
@@ -220,22 +218,25 @@ function onGuessOrSkip(isSkip = false) {
 function showRoundSummary() {
     clearTimeout(opponentFinishedTimer);
     
+    // First guess bonus
+    let myFirstBonus = 0;
+    let oppFirstBonus = 0;
     if (partyState.myState.finished && !partyState.myState.skipped && partyState.opponentState.finished && !partyState.opponentState.skipped) {
         if (partyState.myState.time < partyState.opponentState.time) {
-            partyState.myState.points += 50;
+            myFirstBonus = 50;
         } else if (partyState.opponentState.time < partyState.myState.time) {
-            partyState.opponentState.points += 50;
+            oppFirstBonus = 50;
         }
     }
-    partyState.myScore += partyState.myState.points;
-    partyState.opponentScore += partyState.opponentState.points;
+    partyState.myScore += partyState.myState.points + myFirstBonus;
+    partyState.opponentScore += partyState.opponentState.points + oppFirstBonus;
     
     const domainData = partyState.domains[partyState.round];
     document.getElementById('summary-correct-answer').textContent = `Lösung: ${domainData.tld.toUpperCase()} - ${domainData.answers[0]}`;
     
     document.getElementById('summary-points-info').innerHTML = `
-        <p>Du: ${partyState.myState.points} Punkte</p>
-        <p>Gegner: ${partyState.opponentState.points} Punkte</p>
+        <p>Du: ${partyState.myState.points} (Basis) + ${myFirstBonus} (Bonus) = ${partyState.myState.points + myFirstBonus} Punkte</p>
+        <p>Gegner: ${partyState.opponentState.points} (Basis) + ${oppFirstBonus} (Bonus) = ${partyState.opponentState.points + oppFirstBonus} Punkte</p>
     `;
 
     showScreen('round-summary-overlay');
@@ -248,7 +249,7 @@ function showRoundSummary() {
         countdown--;
         if (countdown < 0) {
             clearInterval(interval);
-            showScreen('game');
+            document.getElementById('round-summary-overlay').classList.add('hidden');
             partyState.round++;
             startNextRound();
         }
@@ -256,7 +257,6 @@ function showRoundSummary() {
 }
 
 function updatePartyScoreDisplay(showScores) {
-    const myName = isHost ? "Host" : "Gast";
     if (showScores) {
         document.getElementById('party-score-display').textContent = `Du: ${partyState.myScore} | Gegner: ${partyState.opponentScore}`;
     } else {
@@ -284,15 +284,10 @@ function getHint() {
 }
 
 function skipDomain() {
-    if (connection) {
-        onGuessOrSkip(true);
-    } else {
-        nextDomain();
-    }
+    if (connection) { onGuessOrSkip(true); } 
+    else { nextDomain(); }
 }
 
-
-// ====== Singleplayer Logik ======
 function startSingleplayer() {
     loadPlayerState();
     gameState = { round: 0, score: 0, xpThisRound: 0, domains: getDomainPool(10), current: {} };
@@ -317,8 +312,7 @@ function getDomainPool(count) {
 
 function nextDomain() {
     if (gameState.round >= gameState.domains.length) {
-        endGame(false);
-        return;
+        endGame(false); return;
     }
     gameState.current = gameState.domains[gameState.round];
     document.getElementById("domain").textContent = gameState.current.tld;
@@ -349,8 +343,6 @@ function endGame(isParty) {
     }
 }
 
-
-// ====== Endlos-Modus ======
 function startEndlessMode() {
     gameState = { score: 0, correctCount: 0, recent: [], current: {} };
     showScreen("endlessGame");
@@ -372,69 +364,63 @@ function nextEndlessDomain() {
     document.getElementById("endlessDomain").textContent = gameState.current.tld;
 }
 
-
-// ====== XP & Level System ======
 function getXpForNextLevel(level) { return Math.floor(100 * Math.pow(1.15, level - 1)); }
 function loadPlayerState() { const savedState = localStorage.getItem('domainGuessrPlayerState'); if (savedState) playerState = JSON.parse(savedState); updatePlayerUI(); }
 function savePlayerState() { localStorage.setItem('domainGuessrPlayerState', JSON.stringify(playerState)); }
-
-function updatePlayerUI() {
+function addXp(amount) { playerState.xp += amount; const neededXp = getXpForNextLevel(playerState.level); if (playerState.xp >= neededXp) { playerState.level++; playerState.xp -= neededXp; } savePlayerState(); updatePlayerUI(); }
+function updatePlayerUI() { 
     const xpForNext = getXpForNextLevel(playerState.level);
-    document.getElementById('playerLevel').textContent = `Level ${playerState.level}`;
-    document.getElementById('playerXp').textContent = `XP: ${playerState.xp}/${xpForNext}`;
     const progress = Math.min(100, (playerState.xp / xpForNext) * 100);
-    document.getElementById('xpProgressBar').style.width = `${progress}%`;
+    document.getElementById('level-text').textContent = `Level ${playerState.level}`;
+    document.getElementById('xp-text').textContent = `${playerState.xp} / ${xpForNext} XP`;
+    document.getElementById('xp-bar').style.width = `${progress}%`;
 }
 
-function addXp(amount) {
-    playerState.xp += amount;
-    const xpForNext = getXpForNextLevel(playerState.level);
-    if (playerState.xp >= xpForNext) {
-        playerState.level++;
-        playerState.xp -= xpForNext;
-        flashPoints(`🎉 Level Up! Du bist jetzt Level ${playerState.level}`);
-    }
-    savePlayerState();
-    updatePlayerUI();
-}
+async function submitScore() { /* Platzhalter für Phase 3 */ alert("Leaderboard wird in Phase 3 repariert."); }
+async function showLeaderboard() { /* Platzhalter für Phase 3 */ alert("Leaderboard wird in Phase 3 repariert."); }
 
+window.onload = () => {
+    document.getElementById("guess").addEventListener("input", () => {
+        const guess = document.getElementById("guess").value.trim().toLowerCase();
+        if (connection) {
+            if (partyState.domains[partyState.round].answers.some(a => guess.includes(a))) onGuessOrSkip(false);
+        } else {
+            if (!gameState.current || !gameState.current.answers) return;
+            if (gameState.current.answers.some(a => guess.includes(a))) {
+                const points = (gameState.current.difficulty || 1) * 100;
+                gameState.score += points;
+                const xpGained = (gameState.current.difficulty || 1) * 10;
+                addXp(xpGained);
+                gameState.xpThisRound += xpGained;
+                flashPoints(`+${points}`);
+                nextDomain();
+            }
+        }
+    });
 
-// ====== Leaderboard-System ======
-async function submitScore() {
-    const nameInput = document.getElementById("playerName");
-    const playerName = nameInput.value.trim();
-    if (!playerName) { alert("Bitte gib einen Namen ein!"); return; }
-    document.getElementById("submitScoreBtn").disabled = true;
-    document.getElementById("submitScoreBtn").textContent = "Sende...";
+    document.getElementById("endlessGuess").addEventListener("input", () => {
+        const guess = document.getElementById("endlessGuess").value.trim().toLowerCase();
+        if (gameState.current.answers.some(a => guess.includes(a))) {
+            gameState.correctCount++;
+            const streakBonus = Math.floor(gameState.correctCount / 10);
+            gameState.score += 10 + streakBonus;
+            document.getElementById("endlessScore").textContent = "Score: " + gameState.score;
+            nextEndlessDomain();
+        }
+    });
+    
+    document.getElementById("endlessSkipBtn").addEventListener("click", () => {
+        const flash = document.getElementById("endlessAnswerFlash");
+        flash.textContent = "Antwort: " + gameState.current.answers[0];
+        setTimeout(() => nextEndlessDomain(), 1200);
+    });
 
-    try {
-        const response = await fetch(`${backendUrl}/leaderboard`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: playerName, score: gameState.score })
-        });
-        if (response.ok) {
-            alert("Score erfolgreich hochgeladen!");
-            showLeaderboard();
-        } else { alert("Fehler beim Hochladen des Scores."); }
-    } catch(e) { alert("Netzwerkfehler."); }
-}
-
-async function showLeaderboard() {
-    showScreen("leaderboard");
-    const table = document.getElementById("leaderboardTable");
-    table.innerHTML = "<tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
-
-    try {
-        const res = await fetch(`${backendUrl}/leaderboard`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        data.slice(0, 50).forEach((entry, i) => {
-            const row = document.createElement("tr");
-            row.innerHTML = `<td>${i + 1}</td><td>${entry.name}</td><td>${entry.score}</td>`;
-            table.appendChild(row);
-        });
-    } catch(e) {
-        table.innerHTML += "<tr><td colspan='3'>Fehler beim Laden.</td></tr>";
-    }
-}
+    window.game = {
+        startSingleplayer, startEndlessMode, showPartyMenu, showLeaderboard, backToMenu,
+        createPartyLobby, joinPartyLobby, copyLobbyCode, kickPlayer, leaveLobby, startPartyGame,
+        getHint, skipDomain, submitScore
+    };
+    
+    loadPlayerState();
+    showScreen('mainMenu');
+};
