@@ -21,6 +21,7 @@ function backToMenu(isParty = false) {
         peer = null; connection = null; isHost = false;
         clearTimeout(opponentFinishedTimer);
     }
+    // Kompletter UI-Reset
     document.getElementById('createLobbySection').classList.add('hidden');
     document.getElementById('join-code-input').value = '';
     document.getElementById('host-status').textContent = 'Warte auf Mitspieler...';
@@ -32,7 +33,7 @@ function backToMenu(isParty = false) {
     showScreen("mainMenu");
 }
 
-// ====== Party-Modus Logik ======
+// ====== Party-Modus Logik (mit Server-Weckruf) ======
 function showPartyMenu() { showScreen("partyLobby"); }
 
 function generateShortCode() {
@@ -45,23 +46,30 @@ async function createPartyLobby() {
     const shortCode = generateShortCode();
     document.getElementById('lobby-code-display').textContent = shortCode;
     document.getElementById('createLobbySection').classList.remove('hidden');
-    document.getElementById('host-status').textContent = 'Erstelle Lobby...';
-
+    const hostStatus = document.getElementById('host-status');
+    
+    hostStatus.textContent = 'Verbinde mit Server...';
+    try {
+        await fetch(backendUrl); // Der "Ping" zum Aufwecken
+    } catch (e) { /* Fehler hier ignorieren, Hauptsache Anfrage ist raus */ }
+    
+    hostStatus.textContent = 'Erstelle Lobby...';
     peer = new Peer();
     peer.on('open', async peerId => {
         try {
-            await fetch(`${backendUrl}/create-lobby`, {
+            const response = await fetch(`${backendUrl}/create-lobby`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lobbyCode: shortCode, peerId: peerId })
             });
-            document.getElementById('host-status').textContent = 'Warte auf Mitspieler...';
-        } catch (e) { document.getElementById('host-status').textContent = "❌ Fehler bei Lobby-Erstellung."; }
+            if (!response.ok) throw new Error("Server response not OK");
+            hostStatus.textContent = 'Warte auf Mitspieler...';
+        } catch (e) { hostStatus.textContent = "❌ Fehler bei Lobby-Erstellung. Server erreichbar?"; }
     });
     peer.on('connection', setupConnection);
     peer.on('error', (err) => {
         console.error("PeerJS Error:", err);
-        document.getElementById('host-status').textContent = `❌ Netzwerk-Fehler: ${err.type}`;
+        hostStatus.textContent = `❌ Netzwerk-Fehler: ${err.type}`;
     });
 }
 
@@ -69,24 +77,28 @@ async function joinPartyLobby() {
     if (peer) peer.destroy();
     isHost = false;
     const shortCode = document.getElementById('join-code-input').value.toUpperCase();
-    if (shortCode.length !== 4) { document.getElementById('client-status').textContent = "❌ Code muss 4 Zeichen lang sein!"; return; }
+    const clientStatus = document.getElementById('client-status');
+    if (shortCode.length !== 4) { clientStatus.textContent = "❌ Code muss 4 Zeichen lang sein!"; return; }
 
-    document.getElementById('client-status').textContent = "Suche Lobby...";
+    clientStatus.textContent = "Wecke Server auf...";
+    try {
+        await fetch(backendUrl); // Der "Ping" zum Aufwecken
+    } catch (e) { /* Fehler ignorieren */ }
+
+    clientStatus.textContent = "Suche Lobby...";
     try {
         const res = await fetch(`${backendUrl}/join-lobby/${shortCode}`);
-        if (!res.ok) { document.getElementById('client-status').textContent = "❌ Lobby nicht gefunden."; return; }
+        if (!res.ok) { clientStatus.textContent = "❌ Lobby nicht gefunden."; return; }
         const data = await res.json();
         const hostPeerId = data.peerId;
 
         peer = new Peer();
-        peer.on('open', () => {
-            setupConnection(peer.connect(hostPeerId, { reliable: true }));
-        });
+        peer.on('open', () => { setupConnection(peer.connect(hostPeerId, { reliable: true })); });
         peer.on('error', (err) => {
             console.error("PeerJS Error:", err);
-            document.getElementById('client-status').textContent = `❌ Netzwerk-Fehler: ${err.type}`;
+            clientStatus.textContent = `❌ Netzwerk-Fehler: ${err.type}`;
         });
-    } catch(e) { document.getElementById('client-status').textContent = "❌ Fehler beim Beitreten."; }
+    } catch(e) { clientStatus.textContent = "❌ Fehler beim Beitreten. Server erreichbar?"; }
 }
 
 function setupConnection(conn) {
@@ -100,10 +112,9 @@ function setupConnection(conn) {
             document.getElementById('client-status').textContent = "✅ Verbunden! Warte auf Spielstart...";
             const leaveBtn = document.getElementById('leave-lobby-btn');
             leaveBtn.classList.remove('hidden');
-            setTimeout(() => { leaveBtn.disabled = false; }, 5000); // 5s Cooldown
+            setTimeout(() => { leaveBtn.disabled = false; }, 5000);
         }
     });
-
     connection.on('data', handlePeerData);
     connection.on('close', () => {
         if (!partyState || !partyState.settings || partyState.round < partyState.settings.rounds) {
@@ -126,7 +137,7 @@ function handlePeerData(data) {
         case 'start': initializePartyGame(data); break;
         case 'round_finished':
             partyState.opponentState = data.state;
-            updatePartyScoreDisplay(true); // Zwischenstand aktualisieren
+            updatePartyScoreDisplay(true);
             if (partyState.myState.finished) {
                 clearTimeout(opponentFinishedTimer);
                 showRoundSummary();
@@ -154,6 +165,7 @@ function copyLobbyCode() {
 function kickPlayer() { if(connection) { connection.send({ type: 'kicked' }); setTimeout(() => connection.close(), 500); } }
 function leaveLobby() { if(connection) { connection.send({ type: 'left' }); setTimeout(() => backToMenu(true), 500); } }
 
+// ====== Spielablauf & Runden-Logik (PARTY MODUS) ======
 function initializePartyGame(initialState) {
     partyState = { myScore: 0, opponentScore: 0, round: 0, domains: initialState.domains, settings: initialState.settings };
     document.getElementById('player-stats').style.display = 'none';
@@ -168,45 +180,35 @@ function startNextRound() {
         endGame(true);
         return;
     }
-    
     partyState.myState = { finished: false, time: 0, points: 0, skipped: false };
     partyState.opponentState = { finished: false, time: 0, points: 0, skipped: false };
-    
     updatePartyScoreDisplay(false);
     document.getElementById('round-info').textContent = `Runde ${partyState.round + 1}/${partyState.settings.rounds}`;
     document.getElementById('domain').textContent = partyState.domains[partyState.round].tld;
     document.getElementById('guess').value = '';
     document.getElementById('guess').disabled = false;
     document.getElementById('hint-btn').disabled = false;
-    
     roundTimer = Date.now();
 }
 
 function onGuessOrSkip(isSkip = false) {
     if (partyState.myState.finished) return;
     clearTimeout(opponentFinishedTimer);
-
     const timeTaken = (Date.now() - roundTimer) / 1000;
     partyState.myState = { ...partyState.myState, time: timeTaken, finished: true, skipped: isSkip };
-
     let pointsObject = { base: 0, timeBonus: 0, total: 0 };
     const domainData = partyState.domains[partyState.round];
     const guess = document.getElementById("guess").value.trim().toLowerCase();
-
     if (!isSkip && domainData.answers.some(a => guess.includes(a))) {
         pointsObject.base = 250;
         const multiplier = Math.max(1, 2 - (timeTaken - 5) * 0.05);
         pointsObject.timeBonus = Math.round(pointsObject.base * (multiplier - 1));
         pointsObject.total = pointsObject.base + pointsObject.timeBonus;
     }
-    
     partyState.myState.points = pointsObject.total;
-    
     document.getElementById('guess').disabled = true;
     document.getElementById('hint-btn').disabled = true;
-
     connection.send({ type: 'round_finished', state: partyState.myState });
-    
     if (partyState.opponentState.finished) {
         showRoundSummary();
     } else {
@@ -217,8 +219,6 @@ function onGuessOrSkip(isSkip = false) {
 
 function showRoundSummary() {
     clearTimeout(opponentFinishedTimer);
-    
-    // First guess bonus
     let myFirstBonus = 0;
     let oppFirstBonus = 0;
     if (partyState.myState.finished && !partyState.myState.skipped && partyState.opponentState.finished && !partyState.opponentState.skipped) {
@@ -230,18 +230,11 @@ function showRoundSummary() {
     }
     partyState.myScore += partyState.myState.points + myFirstBonus;
     partyState.opponentScore += partyState.opponentState.points + oppFirstBonus;
-    
     const domainData = partyState.domains[partyState.round];
     document.getElementById('summary-correct-answer').textContent = `Lösung: ${domainData.tld.toUpperCase()} - ${domainData.answers[0]}`;
-    
-    document.getElementById('summary-points-info').innerHTML = `
-        <p>Du: ${partyState.myState.points} (Basis) + ${myFirstBonus} (Bonus) = ${partyState.myState.points + myFirstBonus} Punkte</p>
-        <p>Gegner: ${partyState.opponentState.points} (Basis) + ${oppFirstBonus} (Bonus) = ${partyState.opponentState.points + oppFirstBonus} Punkte</p>
-    `;
-
+    document.getElementById('summary-points-info').innerHTML = `<p>Du: ${partyState.myState.points} (Basis) + ${myFirstBonus} (Bonus) = ${partyState.myState.points + myFirstBonus} Punkte</p><p>Gegner: ${partyState.opponentState.points} (Basis) + ${oppFirstBonus} (Bonus) = ${partyState.opponentState.points + oppFirstBonus} Punkte</p>`;
     showScreen('round-summary-overlay');
     updatePartyScoreDisplay(true);
-
     let countdown = 5;
     const timerEl = document.getElementById('summary-next-round-timer');
     const interval = setInterval(() => {
@@ -268,7 +261,6 @@ function flashPoints(text) {
     const container = document.getElementById('points-flash-container');
     const oldFlash = document.getElementById('points-flash');
     if(oldFlash) oldFlash.remove();
-
     const flash = document.createElement('div');
     flash.id = 'points-flash';
     flash.textContent = text;
@@ -288,6 +280,7 @@ function skipDomain() {
     else { nextDomain(); }
 }
 
+// ====== Singleplayer & andere Modi ======
 function startSingleplayer() {
     loadPlayerState();
     gameState = { round: 0, score: 0, xpThisRound: 0, domains: getDomainPool(10), current: {} };
@@ -376,9 +369,10 @@ function updatePlayerUI() {
     document.getElementById('xp-bar').style.width = `${progress}%`;
 }
 
-async function submitScore() { /* Platzhalter für Phase 3 */ alert("Leaderboard wird in Phase 3 repariert."); }
-async function showLeaderboard() { /* Platzhalter für Phase 3 */ alert("Leaderboard wird in Phase 3 repariert."); }
+async function submitScore() { alert("Leaderboard wird in Phase 3 repariert."); }
+async function showLeaderboard() { alert("Leaderboard wird in Phase 3 repariert."); }
 
+// ====== Initialisierung & Event Listener ======
 window.onload = () => {
     document.getElementById("guess").addEventListener("input", () => {
         const guess = document.getElementById("guess").value.trim().toLowerCase();
