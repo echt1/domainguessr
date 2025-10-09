@@ -48,13 +48,12 @@ async function createPartyLobby() {
     document.getElementById('lobby-code-display').textContent = shortCode;
     document.getElementById('createLobbySection').classList.remove('hidden');
     const hostStatus = document.getElementById('host-status');
-    hostStatus.textContent = 'Wecke Server auf...';
-    try { await fetch(backendUrl); } catch (e) {}
     hostStatus.textContent = 'Erstelle Lobby...';
 
     peer = new Peer();
     peer.on('open', async peerId => {
         try {
+            hostStatus.textContent = 'Registriere Lobby beim Server...';
             const response = await fetch(`${backendUrl}/create-lobby`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -74,15 +73,18 @@ async function joinPartyLobby() {
     const shortCode = document.getElementById('join-code-input').value.toUpperCase();
     const clientStatus = document.getElementById('client-status');
     if (shortCode.length !== 4) { clientStatus.textContent = "❌ Code muss 4 Zeichen lang sein!"; return; }
-    clientStatus.textContent = "Wecke Server auf...";
-    try { await fetch(backendUrl); } catch (e) {}
+
     clientStatus.textContent = "Suche Lobby...";
     try {
         const res = await fetch(`${backendUrl}/join-lobby/${shortCode}`);
         if (!res.ok) { clientStatus.textContent = "❌ Lobby nicht gefunden."; return; }
         const data = await res.json();
+        
+        clientStatus.textContent = "Verbinde mit Host...";
         peer = new Peer();
-        peer.on('open', () => { setupConnection(peer.connect(data.peerId, { reliable: true })); });
+        peer.on('open', () => {
+            setupConnection(peer.connect(data.peerId, { reliable: true }));
+        });
         peer.on('error', (err) => { console.error("PeerJS Error:", err); clientStatus.textContent = `❌ Netzwerk-Fehler: ${err.type}`; });
     } catch(e) { clientStatus.textContent = "❌ Fehler beim Beitreten."; }
 }
@@ -142,10 +144,11 @@ function handlePeerData(data) {
 
 function copyLobbyCode() {
     const code = document.getElementById('lobby-code-display').textContent;
-    if (code && code.includes('...')) return;
-    navigator.clipboard.writeText(code).then(() => {
-        document.getElementById('host-status').textContent = `Code "${code}" kopiert!`;
-    });
+    if (code && !code.includes('...')) {
+        navigator.clipboard.writeText(code).then(() => {
+            document.getElementById('host-status').textContent = `Code "${code}" kopiert!`;
+        });
+    }
 }
 
 function kickPlayer() {
@@ -379,9 +382,9 @@ async function showLeaderboard() { alert("Leaderboard wird in Phase 3 repariert.
 window.onload = () => {
     document.getElementById("guess").addEventListener("input", () => {
         const guess = document.getElementById("guess").value.trim().toLowerCase();
-        if (connection) {
-            if (!partyState.myState.finished && partyState.domains[partyState.round].answers.some(a => guess.includes(a))) onGuessOrSkip(false);
-        } else {
+        if (connection && partyState && partyState.domains) { // Party-Modus
+            if (!partyState.myState.finished && partyState.domains[partyState.round]?.answers.some(a => guess.includes(a))) onGuessOrSkip(false);
+        } else { // Singleplayer-Modus
             if (!gameState.current || !gameState.current.answers) return;
             if (gameState.current.answers.some(a => guess.includes(a))) {
                 const points = (gameState.current.difficulty || 1) * 100;
